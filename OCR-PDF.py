@@ -4,6 +4,7 @@ from PIL import Image
 import os
 import tkinter as tk
 from tkinter import filedialog, messagebox, scrolledtext, ttk
+import sqlite3
 import uuid
 from difflib import get_close_matches
 
@@ -47,6 +48,57 @@ cartas = {
     "D9": "CARTA LIBRE"
 }
 
+# Crear la base de datos y las tablas
+def crear_base_datos():
+    conn = sqlite3.connect('resultados.db')
+    c = conn.cursor()
+    
+    # Crear tabla para los datos del paciente
+    c.execute('''CREATE TABLE IF NOT EXISTS pacientes (
+                 id INTEGER PRIMARY KEY AUTOINCREMENT,
+                 patient_id TEXT,
+                 nombre TEXT,
+                 sexo TEXT,
+                 edad TEXT,
+                 oficio TEXT,
+                 enfermedad TEXT)''')
+    
+    # Crear tabla para las cartas
+    c.execute('''CREATE TABLE IF NOT EXISTS cartas (
+                 carta_id TEXT PRIMARY KEY,
+                 descripcion TEXT)''')
+    
+    # Crear tabla para los resultados
+    c.execute('''CREATE TABLE IF NOT EXISTS resultados (
+                 id INTEGER PRIMARY KEY AUTOINCREMENT,
+                 patient_id TEXT,
+                 categoria TEXT,
+                 carta_id TEXT,
+                 texto TEXT,
+                 FOREIGN KEY (patient_id) REFERENCES pacientes (patient_id))''')
+    
+    conn.commit()
+    conn.close()
+
+# Llamar a la función para crear la base de datos y las tablas
+crear_base_datos()
+
+# Función para insertar las cartas en la base de datos
+def insertar_cartas():
+    conn = sqlite3.connect('resultados.db')
+    c = conn.cursor()
+    
+    for carta_id, descripcion in cartas.items():
+        c.execute('''INSERT OR IGNORE INTO cartas (carta_id, descripcion)
+                     VALUES (?, ?)''', (carta_id, descripcion))
+    
+    conn.commit()
+    conn.close()
+
+# Llamar a la función para insertar las cartas en la base de datos
+insertar_cartas()
+
+
 # Función para seleccionar un archivo PDF
 def seleccionar_archivo():
     archivo = filedialog.askopenfilename(filetypes=[("Archivos PDF", "*.pdf")])
@@ -69,10 +121,48 @@ def mostrar_resultados(texto_final):
 
 # Función para guardar los resultados en un archivo de texto
 def guardar_resultados(texto_final, patient_id):
+    conn = sqlite3.connect('resultados.db')
+    c = conn.cursor()
+    # Guardar datos del paciente
+    nombre = entry_nombre.get()
+    sexo = combo_sexo.get()
+    edad_str = entry_edad.get()
+    oficio = entry_oficio.get()
+    enfermedad = entry_enfermedad.get()
+
+    c.execute('''INSERT INTO pacientes (patient_id, nombre, sexo, edad, oficio, enfermedad) 
+                 VALUES (?, ?, ?, ?, ?, ?)''', 
+              (patient_id, nombre, sexo, edad_str, oficio, enfermedad))
+    
+    # Procesar el texto final para guardar los resultados categorizados
+    lines = texto_final.split('\n')
+    categoria = None
+
+    for line in lines:
+        line = line.strip()
+        if line.startswith("Desconocido: Muy"):
+            categoria = "Muy Importante"
+        elif line.startswith("Desconocido: Nada"):
+            categoria = "Nada Importante"
+        elif line and categoria:
+            if ':' in line:
+                carta_id, texto = line.split(':', 1)
+                c.execute('''INSERT INTO resultados (patient_id, categoria, carta_id, texto)
+                             VALUES (?, ?, ?, ?)''', 
+                          (patient_id, categoria, carta_id.strip(), texto.strip()))
+    
+    conn.commit()
+    conn.close()
+    messagebox.showinfo("Información", f"Resultados guardados en la base de datos con ID {patient_id}")
+
+
     archivo_salida = f"resultados_{patient_id}.txt"
     with open(archivo_salida, 'w', encoding='utf-8') as f:
         f.write(texto_final)
     messagebox.showinfo("Información", f"Resultados guardados en {archivo_salida}")
+
+
+
 def limpiar_campos():
     entry_archivo_pdf.delete(0, tk.END)
     entry_nombre.delete(0, tk.END)
@@ -80,6 +170,8 @@ def limpiar_campos():
     entry_edad.delete(0, tk.END)
     entry_oficio.delete(0, tk.END)
     entry_enfermedad.delete(0, tk.END)
+
+
     
 # Función para procesar el archivo PDF
 def procesar_pdf():
@@ -110,7 +202,7 @@ def procesar_pdf():
     except ValueError:
         messagebox.showerror("Error", "La edad debe ser un número válido")
         return
-    limpiar_campos()
+    
 
     # Generar un ID único para el paciente
     patient_id = str(uuid.uuid4())
@@ -234,16 +326,25 @@ def procesar_pdf():
     guardar_resultados(texto_final, patient_id)
     # Mostrar los resultados en la ventana
     mostrar_resultados(texto_final)
+    limpiar_campos()
 
 # Crear la ventana principal
 root = tk.Tk()
 root.title("Procesamiento de PDFs a Texto")
-root.geometry("700x350")
+root.geometry("720x550")
 root.configure(bg="#f0f0f0")
 
 # Crear widgets
 frame_form = tk.Frame(root, bg="#f0f0f0")
 frame_form.pack(padx=10, pady=10, fill=tk.BOTH, expand=True)
+
+# Load the logo
+logo = tk.PhotoImage(file="logo-ucen-azul.png.png")  # replace with the path to your logo
+
+# Create a label for the logo and add it to the form
+label_logo = tk.Label(frame_form, image=logo, bg="#f0f0f0")
+label_logo.image = logo  # keep a reference to avoid garbage collection
+label_logo.grid(row=6, columnspan=6)  # change the row and column if needed
 
 label_archivo_pdf = tk.Label(frame_form, text="Archivo PDF:", bg="#f0f0f0", font=("Helvetica", 10))
 label_archivo_pdf.grid(row=0, column=0, sticky=tk.W, pady=5)
