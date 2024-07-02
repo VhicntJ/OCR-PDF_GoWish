@@ -7,6 +7,13 @@ from tkinter import filedialog, messagebox, scrolledtext, ttk
 import sqlite3
 import uuid
 from difflib import get_close_matches
+import sys
+
+os.path.join(os.path.dirname(sys.executable), 'Scripts')
+os.path.dirname(sys.executable)
+
+pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
+os.environ['TESSDATA_PREFIX'] = r'C:\Program Files\Tesseract-OCR'
 
 # Diccionario de cartas con sus IDs
 cartas = {
@@ -47,6 +54,104 @@ cartas = {
     "D8": "Saber qué cambios puede tener mi cuerpo",
     "D9": "CARTA LIBRE"
 }
+enfermedades_comunes = [
+    "Enfermedades cardíacas", "Cáncer", "Enfermedades respiratorias", "Accidente cerebrovascular",
+    "Enfermedades de Alzheimer", "Diabetes", "Insuficiencia renal", "Enfermedad hepática crónica",
+    "Enfermedad pulmonar obstructiva crónica (EPOC)", "Neumonía", "Sepsis", "Enfermedades neurológicas",
+    "Enfermedades infecciosas", "Enfermedades autoinmunes", "Enfermedades genéticas",
+    "Enfermedades hematológicas", "Enfermedades metabólicas", "Enfermedades degenerativas",
+    "Enfermedades gastrointestinales", "Enfermedades renales","Tuberculosis","VIH/SIDA",
+"Sepsis",
+"Hepatitis B y C",
+"Meningitis bacteriana",
+"Neumonía bacteriana",
+"Infección por Clostridium difficile",
+"Septicemia",
+"Cáncer de pulmón",
+"Cáncer de mama",
+"Cáncer de próstata",
+"Cáncer colorrectal",
+"Cáncer de páncreas",
+"Cáncer de hígado",
+"Cáncer de esófago",
+"Cáncer de estómago",
+"Leucemia mieloide aguda",
+"Leucemia linfocítica crónica",
+"Linfoma de Hodgkin",
+"Linfoma no Hodgkin",
+"Mieloma múltiple",
+"Glioblastoma",
+"Leucemia aguda",
+"Linfoma maligno",
+"Anemia aplásica",
+"Mielodisplasia",
+"Anemia falciforme con crisis severas",
+"Trombocitopenia severa",
+"Lupus eritematoso sistémico severo",
+"Esclerosis múltiple en etapa avanzada",
+"Artritis reumatoide con complicaciones sistémicas",
+"Enfermedad de Still del adulto",
+"Enfermedad de Behçet",
+"Síndrome de Sjögren con complicaciones",
+"Diabetes mellitus tipo 1 con complicaciones (neuropatía, nefropatía, retinopatía)",
+"Diabetes mellitus tipo 2 con complicaciones (ulceraciones, gangrena)",
+"Insuficiencia suprarrenal aguda",
+"Hipotiroidismo severo (coma mixedematoso)",
+"Hipertiroidismo severo (tormenta tiroidea)",
+"Hiperparatiroidismo con complicaciones",
+"Enfermedad de Graves avanzada",
+"Enfermedad de Parkinson avanzada",
+"Esclerosis lateral amiotrófica (ELA)",
+"Epilepsia refractaria",
+"Meningitis bacteriana",
+"Encefalitis viral",
+"Neuropatía periférica severa",
+"Accidente cerebrovascular (ACV) con secuelas graves",
+"Glioblastoma multiforme",
+"Infarto agudo de miocardio",
+"Insuficiencia cardíaca congestiva avanzada",
+"Enfermedad coronaria crítica",
+"Miocardiopatía dilatada",
+"Miocardiopatía hipertrófica obstructiva",
+"Aneurisma aórtico roto",
+"Enfermedad arterial periférica severa",
+"Endocarditis infecciosa",
+"Enfermedad pulmonar obstructiva crónica (EPOC) en etapa final",
+"Neumonía bacteriana grave",
+"Fibrosis pulmonar idiopática",
+"Asma severa y resistente al tratamiento",
+"Cáncer de pulmón metastásico",
+"Embolia pulmonar masiva",
+"Bronquiectasias con infecciones recurrentes",
+"Cirrosis hepática descompensada",
+"Insuficiencia hepática fulminante",
+"Cáncer de hígado avanzado",
+"Pancreatitis crónica con complicaciones",
+"Colitis ulcerosa fulminante",
+"Enfermedad de Crohn con complicaciones graves",
+"Carcinoma esofágico",
+"Hepatitis alcohólica severa",
+"Úlceras de decúbito infectadas",
+"Melanoma maligno metastásico",
+"Carcinoma de células escamosas",
+"Psoriasis pustulosa generalizada",
+"Esclerodermia sistémica progresiva",
+"Artritis reumatoide con daño articular severo",
+"Lupus eritematoso sistémico con afectación renal",
+"Esclerosis sistémica con afectación pulmonar",
+"Polimiositis con afectación sistémica",
+"Dermatomiositis con complicaciones",
+"Insuficiencia renal crónica en etapa terminal",
+"Cáncer renal metastásico",
+"Cáncer de vejiga avanzado",
+"Hiperplasia prostática benigna con complicaciones severas",
+"Nefropatía diabética avanzada",
+"Síndrome nefrótico con insuficiencia renal",
+"Traumatismo craneoencefálico severo con deterioro neurológico",
+"Lesiones medulares con cuadriplejía",
+"Quemaduras extensas con complicaciones sistémicas",
+"Intoxicación por sustancias tóxicas con daño orgánico múltiple",
+]
 
 # Crear la base de datos y las tablas
 def crear_base_datos():
@@ -79,6 +184,65 @@ def crear_base_datos():
     
     conn.commit()
     conn.close()
+class AutocompleteEntry(tk.Frame):
+    def __init__(self, master, *args, **kwargs):
+        super().__init__(master, *args, **kwargs)
+        self.suggestions = []
+        self.enfermedad = tk.StringVar()  # Variable para almacenar la enfermedad seleccionada
+        
+        self.entry = tk.Entry(self, font=("Helvetica", 12), width=40)
+        self.entry.pack(fill="x", padx=10, pady=10)
+        self.entry.insert(0, "Escriba la enfermedad")
+        self.entry.bind("<FocusIn>", self.clear_placeholder)
+        self.entry.bind("<FocusOut>", self.restore_placeholder)
+        self.entry.bind("<KeyRelease>", self.handle_keyrelease)
+        
+        self.listbox = tk.Listbox(self, font=("Helvetica", 12), width=40)
+        self.listbox.pack(fill="both", expand=True)
+        self.listbox.bind("<ButtonRelease-1>", self.fill_entry)
+        self.listbox.bind("<Return>", self.fill_entry)
+        
+        self.hide_listbox()
+
+    def clear_placeholder(self, event):
+        if self.entry.get() == "Escriba la enfermedad":
+            self.entry.delete(0, tk.END)
+
+    def restore_placeholder(self, event):
+        if not self.entry.get():
+            self.entry.insert(0, "Escriba la enfermedad")
+
+    def handle_keyrelease(self, event):
+        text = self.entry.get().lower()
+        self.suggestions = [item for item in enfermedades_comunes if text in item.lower()]
+        self.update_listbox()
+
+    def update_listbox(self):
+        self.listbox.delete(0, tk.END)
+        for item in self.suggestions:
+            self.listbox.insert(tk.END, item)
+        if self.suggestions:
+            self.show_listbox()
+        else:
+            self.hide_listbox()
+
+    def show_listbox(self):
+        self.listbox.pack()
+
+    def hide_listbox(self):
+        self.listbox.pack_forget()
+
+    def fill_entry(self, event):
+        if self.listbox.curselection():
+            index = self.listbox.curselection()[0]
+            selected_text = self.listbox.get(index)
+            self.enfermedad.set(selected_text)  # Guardar la enfermedad seleccionada en la variable
+            self.entry.delete(0, tk.END)
+            self.entry.insert(0, selected_text)
+            self.hide_listbox()
+        elif event.keysym == "Return":
+            self.enfermedad.set(self.entry.get())  # Guardar la enfermedad escrita manualmente en la variable
+            self.hide_listbox()
 
 # Llamar a la función para crear la base de datos y las tablas
 crear_base_datos()
@@ -128,7 +292,7 @@ def guardar_resultados(texto_final, patient_id):
     sexo = combo_sexo.get()
     edad_str = entry_edad.get()
     oficio = entry_oficio.get()
-    enfermedad = entry_enfermedad.get()
+    enfermedad = autocomplete_entry.enfermedad.get()
 
     c.execute('''INSERT INTO pacientes (patient_id, nombre, sexo, edad, oficio, enfermedad) 
                  VALUES (?, ?, ?, ?, ?, ?)''', 
@@ -166,10 +330,10 @@ def guardar_resultados(texto_final, patient_id):
 def limpiar_campos():
     entry_archivo_pdf.delete(0, tk.END)
     entry_nombre.delete(0, tk.END)
-    combo_sexo.set('')
+    combo_sexo.set('')  # Limpiar el combobox seleccionándolo en vacío
     entry_edad.delete(0, tk.END)
     entry_oficio.delete(0, tk.END)
-    entry_enfermedad.delete(0, tk.END)
+    autocomplete_entry.entry.delete(0, tk.END)  # Limpiar el AutocompleteEntry
 
 
     
@@ -180,7 +344,7 @@ def procesar_pdf():
     sexo = combo_sexo.get()
     edad = entry_edad.get()
     oficio = entry_oficio.get()
-    enfermedad = entry_enfermedad.get()
+    enfermedad = autocomplete_entry.enfermedad.get()
 
     if not os.path.exists(pdf_path):
         messagebox.showerror("Error", "El archivo no existe")
@@ -374,10 +538,18 @@ label_oficio.grid(row=4, column=0, sticky=tk.W, pady=5)
 entry_oficio = tk.Entry(frame_form, width=50, font=("Helvetica", 10))
 entry_oficio.grid(row=4, column=1, pady=5)
 
+# Crear y posicionar el AutocompleteEntry debajo del campo "Oficio"
 label_enfermedad = tk.Label(frame_form, text="Enfermedad:", bg="#f0f0f0", font=("Helvetica", 10))
 label_enfermedad.grid(row=5, column=0, sticky=tk.W, pady=5)
-entry_enfermedad = tk.Entry(frame_form, width=50, font=("Helvetica", 10))
-entry_enfermedad.grid(row=5, column=1, pady=5)
+autocomplete_entry = AutocompleteEntry(frame_form)
+autocomplete_entry.grid(row=5, column=1, pady=5)
+
+# label_enfermedad = tk.Label(frame_form, text="Enfermedad:", bg="#f0f0f0", font=("Helvetica", 10))
+# label_enfermedad.grid(row=5, column=0, sticky=tk.W, pady=5)
+# entry_enfermedad = tk.Entry(frame_form, width=50, font=("Helvetica", 10))
+# entry_enfermedad.grid(row=5, column=1, pady=5)
+
+
 
 btn_procesar = tk.Button(frame_form, text="Procesar PDF", command=procesar_pdf, bg="#28a745", fg="#ffffff", font=("Helvetica", 12))
 btn_procesar.grid(row=6, columnspan=3, pady=20)
