@@ -1,6 +1,6 @@
 from pdf2image import convert_from_path
 import pytesseract
-from PIL import Image
+from PIL import Image, ImageTk
 import os
 import tkinter as tk
 from tkinter import filedialog, messagebox, scrolledtext, ttk
@@ -153,6 +153,10 @@ enfermedades_comunes = [
 "Intoxicación por sustancias tóxicas con daño orgánico múltiple",
 ]
 
+vivecon = [ "Padre", "Madre", "Hermano(a)", "Hijo(a)", "Pareja", "Amigo(a)", "Tio(a)", "Sobrino(a)","Abuelo(a)","Padrastro","Madrastra","Hermanastro(a)","Hijastro(a)","Primo(a)","Vecino(a)","Cuidador(a)","Cuñado(a)","Yerno(a)","Nuera","Nieto(a)","Vecino(a)"] 
+
+
+
 # Crear la base de datos y las tablas
 def crear_base_datos():
     conn = sqlite3.connect('resultados.db')
@@ -166,7 +170,18 @@ def crear_base_datos():
                  sexo TEXT,
                  edad TEXT,
                  oficio TEXT,
-                 enfermedad TEXT)''')
+                 enfermedad TEXT,
+                 vivecon TEXT)''')
+    
+    
+    #Crear tabla para atendido por
+    c.execute('''CREATE TABLE IF NOT EXISTS atendido_por (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    patient_id TEXT,
+                    atendido_por TEXT,
+                    area TEXT,
+                    sexo2 TEXT,
+                    FOREIGN KEY (patient_id) REFERENCES pacientes (patient_id))''')
     
     # Crear tabla para las cartas
     c.execute('''CREATE TABLE IF NOT EXISTS cartas (
@@ -244,6 +259,67 @@ class AutocompleteEntry(tk.Frame):
             self.enfermedad.set(self.entry.get())  # Guardar la enfermedad escrita manualmente en la variable
             self.hide_listbox()
 
+
+class AutocompleteEntry2(tk.Frame):
+    def __init__(self, master, *args, **kwargs):
+        super().__init__(master, *args, **kwargs)
+        self.suggestions = []
+        self.vivecon = tk.StringVar()  # Variable para almacenar la enfermedad seleccionada
+        
+        self.entry = tk.Entry(self, font=("Helvetica", 12), width=40)
+        self.entry.pack(fill="x", padx=10, pady=10)
+        self.entry.insert(0, "Persona significante para el paciente")
+        self.entry.bind("<FocusIn>", self.clear_placeholder)
+        self.entry.bind("<FocusOut>", self.restore_placeholder)
+        self.entry.bind("<KeyRelease>", self.handle_keyrelease)
+        
+        self.listbox = tk.Listbox(self, font=("Helvetica", 12), width=40)
+        self.listbox.pack(fill="both", expand=True)
+        self.listbox.bind("<ButtonRelease-1>", self.fill_entry)
+        self.listbox.bind("<Return>", self.fill_entry)
+        
+        self.hide_listbox()
+
+    def clear_placeholder(self, event):
+        if self.entry.get() == "Persona significante para el paciente":
+            self.entry.delete(0, tk.END)
+
+    def restore_placeholder(self, event):
+        if not self.entry.get():
+            self.entry.insert(0, "Persona significante para el paciente")
+
+    def handle_keyrelease(self, event):
+        text = self.entry.get().lower()
+        self.suggestions = [item for item in vivecon if text in item.lower()]
+        self.update_listbox()
+
+    def update_listbox(self):
+        self.listbox.delete(0, tk.END)
+        for item in self.suggestions:
+            self.listbox.insert(tk.END, item)
+        if self.suggestions:
+            self.show_listbox()
+        else:
+            self.hide_listbox()
+
+    def show_listbox(self):
+        self.listbox.pack()
+
+    def hide_listbox(self):
+        self.listbox.pack_forget()
+
+    def fill_entry(self, event):
+        if self.listbox.curselection():
+            index = self.listbox.curselection()[0]
+            selected_text = self.listbox.get(index)
+            self.vivecon.set(selected_text)  # Guardar la enfermedad seleccionada en la variable
+            self.entry.delete(0, tk.END)
+            self.entry.insert(0, selected_text)
+            self.hide_listbox()
+        elif event.keysym == "Return":
+            self.vivecon.set(self.entry.get())  # Guardar la enfermedad escrita manualmente en la variable
+            self.hide_listbox()
+
 # Llamar a la función para crear la base de datos y las tablas
 crear_base_datos()
 
@@ -274,7 +350,7 @@ def seleccionar_archivo():
 def mostrar_resultados(texto_final):
     resultados_ventana = tk.Toplevel(root)
     resultados_ventana.title("Resultados de Texto")
-    resultados_ventana.geometry("800x600")
+    resultados_ventana.geometry("1000x900")
     resultados_ventana.configure(bg="#f0f0f0")
     
     texto_resultados = scrolledtext.ScrolledText(resultados_ventana, wrap=tk.WORD, font=("Helvetica", 12), bg="#ffffff", fg="#333333")
@@ -293,10 +369,11 @@ def guardar_resultados(texto_final, patient_id):
     edad_str = entry_edad.get()
     oficio = entry_oficio.get()
     enfermedad = autocomplete_entry.enfermedad.get()
+    vivecon = autocomplete_entry2.vivecon.get()
 
-    c.execute('''INSERT INTO pacientes (patient_id, nombre, sexo, edad, oficio, enfermedad) 
-                 VALUES (?, ?, ?, ?, ?, ?)''', 
-              (patient_id, nombre, sexo, edad_str, oficio, enfermedad))
+    c.execute('''INSERT INTO pacientes (patient_id, nombre, sexo, edad, oficio, enfermedad, vivecon) 
+                 VALUES (?, ?, ?, ?, ?, ?, ?)''', 
+              (patient_id, nombre, sexo, edad_str, oficio, enfermedad, vivecon))
     
     # Procesar el texto final para guardar los resultados categorizados
     lines = texto_final.split('\n')
@@ -314,6 +391,15 @@ def guardar_resultados(texto_final, patient_id):
                 c.execute('''INSERT INTO resultados (patient_id, categoria, carta_id, texto)
                              VALUES (?, ?, ?, ?)''', 
                           (patient_id, categoria, carta_id.strip(), texto.strip()))
+                
+    # Guardar datos de atendido por
+    atendido_por = combo_atendidopor.get()
+    area = combo_area.get()
+    sexo2 = combo_sexo.get()
+    c.execute('''INSERT INTO atendido_por (patient_id, atendido_por, area, sexo2)
+                    VALUES (?, ?, ?, ?)''',
+                (patient_id, atendido_por, area, sexo2))
+    
     
     conn.commit()
     conn.close()
@@ -345,6 +431,7 @@ def procesar_pdf():
     edad = entry_edad.get()
     oficio = entry_oficio.get()
     enfermedad = autocomplete_entry.enfermedad.get()
+    vivecon = autocomplete_entry2.vivecon.get()
 
     if not os.path.exists(pdf_path):
         messagebox.showerror("Error", "El archivo no existe")
@@ -494,8 +581,8 @@ def procesar_pdf():
 
 # Crear la ventana principal
 root = tk.Tk()
-root.title("Procesamiento de PDFs a Texto")
-root.geometry("720x550")
+root.title("OCR-PDF_GoWish-UCEN")
+root.geometry("900x1000")
 root.configure(bg="#f0f0f0")
 
 # Crear widgets
@@ -508,51 +595,89 @@ logo = tk.PhotoImage(file="logo-ucen-azul.png.png")  # replace with the path to 
 # Create a label for the logo and add it to the form
 label_logo = tk.Label(frame_form, image=logo, bg="#f0f0f0")
 label_logo.image = logo  # keep a reference to avoid garbage collection
-label_logo.grid(row=6, columnspan=6)  # change the row and column if needed
+label_logo.grid(row=0, column=2)  # change the row and column if needed
+
+# Cargar y redimensionar la imagen
+original_image = Image.open("alumnos.jpg")  # Asegúrate de tener la ruta correcta
+resized_image = original_image.resize((550, 100))  # Cambia 100, 100 al tamaño deseado
+
+# Convertir la imagen PIL a PhotoImage de Tkinter
+logo2 = ImageTk.PhotoImage(resized_image)
+
+# Crear un label para el logo y añadirlo al formulario
+label_logo2 = tk.Label(frame_form, image=logo2, bg="#f0f0f0")
+label_logo2.image = logo2  # mantener una referencia para evitar la recolección de basura
+label_logo2.grid(row=17, columnspan=6)  # cambia la fila y columna si es necesario
+
+label_paciente = tk.Label(frame_form, text="Paciente", bg="#f0f0f0", font=("Helvetica", 30))
+label_paciente.grid(row=1, column=0, sticky=tk.W, pady=5)
 
 label_archivo_pdf = tk.Label(frame_form, text="Archivo PDF:", bg="#f0f0f0", font=("Helvetica", 10))
-label_archivo_pdf.grid(row=0, column=0, sticky=tk.W, pady=5)
+label_archivo_pdf.grid(row=2, column=0, sticky=tk.W, pady=5)
 entry_archivo_pdf = tk.Entry(frame_form, width=50, font=("Helvetica", 10))
-entry_archivo_pdf.grid(row=0, column=1, pady=5)
+entry_archivo_pdf.grid(row=2, column=1, pady=5)
 btn_seleccionar_archivo = tk.Button(frame_form, text="Seleccionar Archivo", command=seleccionar_archivo, bg="#f54242", fg="#ffffff", font=("Helvetica", 10))
-btn_seleccionar_archivo.grid(row=0, column=2, padx=5, pady=5)
+btn_seleccionar_archivo.grid(row=2, column=2, padx=5, pady=5)
 
 label_nombre = tk.Label(frame_form, text="Nombre:", bg="#f0f0f0", font=("Helvetica", 10))
-label_nombre.grid(row=1, column=0, sticky=tk.W, pady=5)
+label_nombre.grid(row=3, column=0, sticky=tk.W, pady=5)
 entry_nombre = tk.Entry(frame_form, width=50, font=("Helvetica", 10))
-entry_nombre.grid(row=1, column=1, pady=5)
+entry_nombre.grid(row=3, column=1, pady=5)
 
 label_sexo = tk.Label(frame_form, text="Género con el que se identifica:", bg="#f0f0f0", font=("Helvetica", 10))
-label_sexo.grid(row=2, column=0, sticky=tk.W, pady=5)
+label_sexo.grid(row=4, column=0, sticky=tk.W, pady=5)
 combo_sexo = ttk.Combobox(frame_form, values=["Masculino", "Femenino", "No binario"], font=("Helvetica", 10),width=47)
-combo_sexo.grid(row=2, column=1, pady=5)
+combo_sexo.grid(row=4, column=1, pady=5)
 combo_sexo.set('')  # Establecer el valor predeterminado en vacío
 
 label_edad = tk.Label(frame_form, text="Edad:", bg="#f0f0f0", font=("Helvetica", 10))
-label_edad.grid(row=3, column=0, sticky=tk.W, pady=5)
+label_edad.grid(row=5, column=0, sticky=tk.W, pady=5)
 entry_edad = tk.Entry(frame_form, width=50, font=("Helvetica", 10))
-entry_edad.grid(row=3, column=1, pady=5)
+entry_edad.grid(row=5, column=1, pady=5)
 
 label_oficio = tk.Label(frame_form, text="Oficio:", bg="#f0f0f0", font=("Helvetica", 10))
-label_oficio.grid(row=4, column=0, sticky=tk.W, pady=5)
+label_oficio.grid(row=6, column=0, sticky=tk.W, pady=5)
 entry_oficio = tk.Entry(frame_form, width=50, font=("Helvetica", 10))
-entry_oficio.grid(row=4, column=1, pady=5)
+entry_oficio.grid(row=6, column=1, pady=5)
 
 # Crear y posicionar el AutocompleteEntry debajo del campo "Oficio"
 label_enfermedad = tk.Label(frame_form, text="Enfermedad:", bg="#f0f0f0", font=("Helvetica", 10))
-label_enfermedad.grid(row=5, column=0, sticky=tk.W, pady=5)
+label_enfermedad.grid(row=7, column=0, sticky=tk.W, pady=5)
 autocomplete_entry = AutocompleteEntry(frame_form)
-autocomplete_entry.grid(row=5, column=1, pady=5)
-
-# label_enfermedad = tk.Label(frame_form, text="Enfermedad:", bg="#f0f0f0", font=("Helvetica", 10))
-# label_enfermedad.grid(row=5, column=0, sticky=tk.W, pady=5)
-# entry_enfermedad = tk.Entry(frame_form, width=50, font=("Helvetica", 10))
-# entry_enfermedad.grid(row=5, column=1, pady=5)
+autocomplete_entry.grid(row=7, column=1, pady=5)
 
 
+
+label_atendidopor = tk.Label(frame_form, text="Atendido Por:", bg="#f0f0f0", font=("Helvetica", 10))
+label_atendidopor.grid(row=10, column=0, sticky=tk.W, pady=5)
+combo_atendidopor = ttk.Combobox(frame_form, values=["Enfermero", "Nutricionista", "Psicologo","Kinesiologo"], font=("Helvetica", 10),width=47)
+combo_atendidopor.grid(row=10, column=1, pady=5)
+combo_atendidopor.set('')
+
+label_area = tk.Label(frame_form, text="Area (Nivel):", bg="#f0f0f0", font=("Helvetica", 10))
+label_area.grid(row=11, column=0, sticky=tk.W, pady=5)
+combo_area = ttk.Combobox(frame_form, values=["Primaria", "Secundaria", "Terciaria","Paleativa"], font=("Helvetica", 10),width=47)
+combo_area.grid(row=11, column=1, pady=5)
+combo_area.set('')
+
+  # Establecer el valor predeterminado en vacío
+# Crear y posicionar el AutocompleteEntry debajo del campo "Oficio"
+label_vivecon = tk.Label(frame_form, text="Vive Con :", bg="#f0f0f0", font=("Helvetica", 10))
+label_vivecon.grid(row=8, column=0, sticky=tk.W, pady=5)
+autocomplete_entry2 = AutocompleteEntry2(frame_form)
+autocomplete_entry2.grid(row=8, column=1, pady=5)
+
+label_paciente = tk.Label(frame_form, text="Quien atiende", bg="#f0f0f0", font=("Helvetica", 30))
+label_paciente.grid(row=9, column=0, sticky=tk.W, pady=5)
+
+label_sexo2 = tk.Label(frame_form, text="Género con el que se identifica:", bg="#f0f0f0", font=("Helvetica", 10))
+label_sexo2.grid(row=12, column=0, sticky=tk.W, pady=5)
+combo_sexo2 = ttk.Combobox(frame_form, values=["Masculino", "Femenino", "No binario"], font=("Helvetica", 10),width=47)
+combo_sexo2.grid(row=12, column=1, pady=5)
+combo_sexo2.set('')  # Establecer el valor predeterminado en vacío
 
 btn_procesar = tk.Button(frame_form, text="Procesar PDF", command=procesar_pdf, bg="#28a745", fg="#ffffff", font=("Helvetica", 12))
-btn_procesar.grid(row=6, columnspan=3, pady=20)
+btn_procesar.grid(row=16, columnspan=3, pady=20)
 
 # Iniciar el loop principal de la interfaz
 root.mainloop()
