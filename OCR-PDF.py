@@ -7,6 +7,7 @@ from tkinter import filedialog, messagebox, scrolledtext, ttk
 import sqlite3
 import uuid
 from difflib import get_close_matches
+import pandas as pd
 import sys
 
 os.path.join(os.path.dirname(sys.executable), 'Scripts')
@@ -579,6 +580,31 @@ def procesar_pdf():
     mostrar_resultados(texto_final)
     limpiar_campos()
 
+def exportar_a_excel():
+    conn = sqlite3.connect('resultados.db')
+
+    # Leer datos de las tablas de la base de datos
+    pacientes_df = pd.read_sql_query("SELECT * FROM pacientes", conn)
+    resultados_df = pd.read_sql_query("SELECT * FROM resultados", conn)
+    cartas_df = pd.read_sql_query("SELECT * FROM cartas", conn)
+    atendidopor_df = pd.read_sql_query("SELECT * FROM atendido_por", conn)
+
+    query_df = pd.read_sql_query("SELECT  p.nombre, p.sexo, p.edad, p.oficio, p.enfermedad,p.vivecon, r.categoria, r.carta_id, r.texto,a.atendido_por,a.area,a.sexo2 FROM pacientes p INNER JOIN resultados r ON p.patient_id = r.patient_id INNER JOIN atendido_por a ON p.patient_id = a.patient_id ",conn)
+    # Cerrar la conexión
+    conn.close()
+
+     # Guardar los datos en un archivo Excel
+    with pd.ExcelWriter('resultados_exportados.xlsx') as writer:
+        pacientes_df.to_excel(writer, sheet_name='Pacientes', index=False)
+        resultados_df.to_excel(writer, sheet_name='Resultados', index=False)
+        cartas_df.to_excel(writer, sheet_name='Cartas', index=False)
+        atendidopor_df.to_excel(writer, sheet_name='Atendido Por', index=False)
+        query_df.to_excel(writer, sheet_name= 'Dinamica', index=False )
+
+    messagebox.showinfo("Información", "Datos exportados a resultados_exportados.xlsx")
+
+
+
 # Crear la ventana principal
 root = tk.Tk()
 root.title("OCR-PDF_GoWish-UCEN")
@@ -678,6 +704,9 @@ combo_sexo2.set('')  # Establecer el valor predeterminado en vacío
 
 btn_procesar = tk.Button(frame_form, text="Procesar PDF", command=procesar_pdf, bg="#28a745", fg="#ffffff", font=("Helvetica", 12))
 btn_procesar.grid(row=16, columnspan=3, pady=20)
+
+btn_exportar_excel = tk.Button(root, text="Exportar a Excel", font=("Helvetica", 14), command=exportar_a_excel)
+btn_exportar_excel.pack(pady=10)
 
 # Iniciar el loop principal de la interfaz
 root.mainloop()
